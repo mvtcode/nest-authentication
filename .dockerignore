@@ -1,0 +1,15 @@
+
+**/*
+
+!.ebextensions/
+!dist/
+!envs/
+!node_modules/
+!src/
+!test/
+!cron.yaml
+!EbApp-Nodejs.yml
+!nesjs-cli.json
+!package.json
+!tsconfig.json
+!tsconfig.build.json

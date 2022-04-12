@@ -1,0 +1,41 @@
+version: "3"
+
+services:
+  main:
+    build: .
+    volumes:
+      - .:/usr/src/app
+    command: npm run start:dev
+    env_file:
+      - .env.docker
+    networks:
+      nest_auth_dev:
+        ipv4_address: 10.10.10.2
+    depends_on:
+      - redis
+      - mongodb
+
+  redis:
+    image: redis:6.0.6-alpine3.12
+    networks:
+      nest_auth_dev:
+        ipv4_address: 10.10.10.10
+
+  mongodb:
+    image: mongo:5.0.6-focal
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      nest_auth_dev:
+        ipv4_address: 10.10.10.30
+
+volumes:
+ mongodb_data:
+
+networks:
+  nest_auth_dev:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.10.10.0/24

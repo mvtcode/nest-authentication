@@ -1,0 +1,27 @@
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+quote_type = single
+max_line_length = off
+
+[{lib,src,test}/**.ts]
+indent_style = space
+indent_size = 2
+signle_quote = true
+insert_semi_colon = true
+
+
+[configure]
+indent_style = space
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+indent_size = 2
+
+[{test/fixtures,deps,tools/node_modules,tools/gyp,tools/icu,tools/msvs}/**]
+insert_final_newline = false
