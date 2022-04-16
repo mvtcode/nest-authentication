@@ -11,8 +11,6 @@ import * as redisStore from 'cache-manager-redis-store';
       ttl: 0, // second
     }),
   ],
-  exports: [
-    CacheModule,
-  ],
+  exports: [CacheModule],
 })
 export class RedisModule {}

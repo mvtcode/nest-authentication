@@ -1,30 +1,91 @@
-import { Controller, Get, Post, Body, Patch, Delete, HttpException, HttpStatus, Inject, CACHE_MANAGER, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Delete,
+  HttpStatus,
+  Inject,
+  CACHE_MANAGER,
+  UseGuards,
+  Request,
+  BadRequestException,
+  NotFoundException,
+  Param,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Types } from 'mongoose';
+import { Cache } from 'cache-manager';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Roles } from '../../decorators/roles.decorator';
+import { comparePassword } from '../../libs/utils';
+import {
+  BadRequestExceptionResDto,
+  ExceptionResDto,
+  UnauthorizedExceptionResDto,
+} from '../exception/exception-request.dto';
 import { UserService } from './user.service';
 import { CreateUserDto, CreateUserResDto } from './dto/create-user.dto';
-import { UpdateUserPasswordDto } from './dto/update-user.dto';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { User } from './schemas/user.schema';
-import { LoginUserDto, LoginUserResDto, ProfileUserDto } from './dto/login-user.dto';
-import { Cache } from 'cache-manager';
-import { parseJson } from 'src/libs/parse';
+import {
+  UpdateUserPasswordDto,
+  UpdateUserRolesDto,
+} from './dto/update-user.dto';
+import {
+  LoginUserDto,
+  LoginUserResDto,
+  ProfileUserDto,
+} from './dto/login-user.dto';
+import { parseJson } from '../../libs/parse';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { LocalAuthGuard } from '../auth/local-auth.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { BadRequestExceptionResDto, ExceptionResDto, UnauthorizedExceptionResDto } from '../exception/exception-request.dto';
 import { SuccessResDto } from './dto/success.dto';
+import { UserTypes } from './constant/userType.constant';
 
 @ApiTags('user')
 @Controller('user')
 export class UserController {
-  private defaultFields = {_id: 1, email: 1, createdAt: 1, updatedAt: 1};
+  private defaultFields = {
+    _id: 1,
+    email: 1,
+    roles: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  };
 
   constructor(
     @Inject(CACHE_MANAGER) private cache: Cache,
     private readonly userService: UserService,
     private jwtService: JwtService,
   ) {}
+
+  @ApiOperation({
+    operationId: 'list-user',
+    description: 'List user',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    isArray: true,
+    type: () => ProfileUserDto,
+    description: 'List user response',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    type: () => UnauthorizedExceptionResDto,
+    description: 'Unauthorized',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserTypes.ADMIN, UserTypes.SUPPER_ADMIN)
+  @Get('')
+  async list() {
+    return this.userService.findAll(this.defaultFields);
+  }
 
   @ApiOperation({
     operationId: 'user-create',
@@ -46,19 +107,19 @@ export class UserController {
     description: 'New user created response',
   })
   @Post()
-  async create(@Body() createUserDto: CreateUserDto) : Promise<User> {
+  async create(@Body() body: CreateUserDto) {
     const isExited = await this.userService.count({
-      email: createUserDto.email
+      email: body.email,
     });
 
     if (isExited) {
-      throw new HttpException({
-        status: HttpStatus.BAD_REQUEST,
-        error: 'Email is existed',
-      }, HttpStatus.BAD_REQUEST);
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Email is existed',
+      });
     }
-    
-    return this.userService.create(createUserDto);
+
+    return this.userService.create(body);
   }
 
   @ApiOperation({
@@ -75,13 +136,35 @@ export class UserController {
     type: () => LoginUserResDto,
     description: 'Login response',
   })
-  @UseGuards(LocalAuthGuard)
   @Post('login')
-  async login(
-    @Request() req,
-    @Body() _body: LoginUserDto
-  ) {
-    const dataSign = req.user;
+  async login(@Body() body: LoginUserDto) {
+    const user = await this.userService.findOne(
+      {
+        email: body.email,
+      },
+      {
+        _id: 1,
+        email: 1,
+        password: 1,
+        roles: 1,
+      },
+    );
+
+    if (!user) {
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Incorect email or password',
+      });
+    }
+
+    if (!(await comparePassword(body.password, user.password))) {
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Incorect email or password',
+      });
+    }
+
+    const { password, ...dataSign } = user;
 
     const refresh_token = new Types.ObjectId().toString();
     await this.cache.set(refresh_token, JSON.stringify(dataSign), { ttl: 0 });
@@ -91,7 +174,7 @@ export class UserController {
       token: this.jwtService.sign(dataSign),
       expire: process.env.JWT_EXPIRE,
       refresh_token,
-    }
+    };
   }
 
   @ApiOperation({
@@ -107,7 +190,7 @@ export class UserController {
   async logout(@Body() request: RefreshTokenDto) {
     await this.cache.del(request.refresh_token);
     return {
-      isSuccess: true
+      isSuccess: true,
     };
   }
 
@@ -130,10 +213,10 @@ export class UserController {
     const dataCache = await this.cache.get(request.refresh_token);
 
     if (!dataCache) {
-      throw new HttpException({
-        status: HttpStatus.BAD_REQUEST,
-        error: 'Incorrect refresh_token',
-      }, HttpStatus.BAD_REQUEST);
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Incorrect refresh_token',
+      });
     }
 
     const dataSign = parseJson(dataCache as string);
@@ -143,7 +226,7 @@ export class UserController {
       token: this.jwtService.sign(dataSign),
       expire: process.env.JWT_EXPIRE,
       refresh_token: request.refresh_token,
-    }
+    };
   }
 
   @ApiOperation({
@@ -163,16 +246,14 @@ export class UserController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  findOne(
-    @Request() req,
-  ) {
+  findOne(@Request() req) {
     const user = req.user;
-    return this.userService.findOne({_id: user._id}, this.defaultFields);
+    return this.userService.findOne({ _id: user._id }, this.defaultFields);
   }
 
   @ApiOperation({
-    operationId: 'user-update-password',
-    description: 'Update password',
+    operationId: 'change-password',
+    description: 'Change password',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -187,12 +268,67 @@ export class UserController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Patch('password')
-  updatePassword(
-    @Request() req,
-    @Body() request: UpdateUserPasswordDto,
-  ) {
+  async updatePassword(@Request() req, @Body() body: UpdateUserPasswordDto) {
     const user = req.user;
-    return this.userService.updatePassword(user._id, request);
+
+    if (body.old_password === body.password) {
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Unacceptable action, old password is not equal password',
+      });
+    }
+
+    const info = await this.userService.findOne(
+      {
+        _id: user._id,
+      },
+      {
+        _id: 1,
+        password: 1,
+      },
+    );
+
+    if (!user) {
+      throw new NotFoundException({
+        statusCode: HttpStatus.NOT_FOUND,
+        message: 'User not found',
+      });
+    }
+
+    if (!(await comparePassword(body.old_password, info.password))) {
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Old password is not match',
+      });
+    }
+
+    return {
+      isSuccess: await this.userService.updatePassword(user._id, body),
+    };
+  }
+
+  @ApiOperation({
+    operationId: 'roles',
+    description: 'Update roles',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: () => SuccessResDto,
+    description: 'Is success response',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    type: () => UnauthorizedExceptionResDto,
+    description: 'Unauthorized',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserTypes.ADMIN, UserTypes.SUPPER_ADMIN)
+  @Patch('roles')
+  async updateRoles(@Body() body: UpdateUserRolesDto) {
+    return {
+      isSuccess: await this.userService.updateRoles(body.id, body.roles),
+    };
   }
 
   @ApiOperation({
@@ -211,13 +347,11 @@ export class UserController {
   })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Delete('')
-  async remove(
-    @Request() req,
-  ) {
-    const user = req.user
+  @Roles(UserTypes.ADMIN, UserTypes.SUPPER_ADMIN)
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
     return {
-      isSuccess: await this.userService.remove(user._id)
-    }
+      isSuccess: await this.userService.remove(id),
+    };
   }
 }

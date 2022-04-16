@@ -1,8 +1,8 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class SuccessResDto {
   @ApiProperty({
-    description: "Is success response",
+    description: 'Is success response',
     type: () => Boolean,
     example: true,
   })

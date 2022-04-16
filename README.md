@@ -14,6 +14,8 @@ This project for base authentication
 
 - Get profile
 
+- Roles
+
 - Refresh token
 
 - Change password

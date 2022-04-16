@@ -1,27 +1,22 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from './schemas/user.schema';
-import { RedisModule } from 'src/commons/redis/redis.module';
-import { JwtModule } from 'src/commons/jwt/jwt.module';
-import { AuthModule } from '../auth/auth.module';
+import { RedisModule } from '../../commons/redis/redis.module';
+import { JwtModule } from '../../commons/jwt/jwt.module';
+import { PassportModule } from '@nestjs/passport';
+import { JwtStrategy } from '../auth/jwt.strategy';
 
 @Module({
   imports: [
-    JwtModule,
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    PassportModule,
+    JwtModule,
     RedisModule,
-    forwardRef(() => AuthModule)
   ],
-  controllers: [
-    UserController,
-  ],
-  providers: [
-    UserService,
-  ],
-  exports: [
-    UserService,
-  ]
+  controllers: [UserController],
+  providers: [UserService, JwtStrategy],
+  exports: [UserService],
 })
 export class UserModule {}
