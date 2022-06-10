@@ -1,0 +1,10 @@
+FROM node:16.15.1-alpine3.16 As development
+
+WORKDIR /app
+
+COPY package*.json .
+RUN npm install --only=development
+
+EXPOSE 80
+
+CMD ["npm", "run", "start:dev"]

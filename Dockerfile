@@ -1,10 +1,29 @@
-FROM node:12.18.2-alpine3.11 As development
+ARG NODE_VERSION=16.15.1-alpine3.16
 
-WORKDIR /usr/src/app
+##### Building stage #####
+FROM node:${NODE_VERSION} As builder
 
-# COPY package*.json .
-# RUN npm install --only=development
+WORKDIR /app
+
+# Install dependencies for build package C of node
+RUN apk update	&& \
+  apk --no-cache add make g++ gcc && \
+  rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
-CMD ["npm", "run", "start:dev"]
+RUN npm i
+RUN npm run build
+
+##### Building the final image #####
+FROM node:${NODE_VERSION}
+
+WORKDIR /app
+
+COPY --from=builder /app/package.json .
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+
+EXPOSE 80
+
+CMD ["npm", "run", "start:prod"]

@@ -40,22 +40,39 @@ export class LoginUserResDto {
   email: string;
 
   @ApiProperty({
+    description: 'Name',
+    type: () => String,
+    example: 'Mac Van Tan',
+  })
+  name: string;
+
+  @ApiProperty({
     description: 'Token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaW...',
     type: () => String,
   })
   token: string;
 
   @ApiProperty({
     description: 'Expire token by second',
+    example: 25200,
     type: () => Number,
   })
   expire: number;
 
   @ApiProperty({
     description: 'Refresh token',
+    example: '62a29cb16a4f2ed5b0300bce',
     type: () => String,
   })
   refresh_token: string;
+
+  @ApiProperty({
+    description: 'Expire refresh token by second',
+    example: 604800,
+    type: () => Number,
+  })
+  expireRefreshToken: number;
 
   @ApiProperty({
     description: 'Roles',
@@ -82,6 +99,7 @@ export class LoginUserResDto {
 export class ProfileUserDto extends PickType(LoginUserResDto, [
   '_id',
   'email',
+  'name',
   'roles',
   'createdAt',
   'updatedAt',

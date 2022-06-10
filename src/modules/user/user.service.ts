@@ -35,6 +35,38 @@ export class UserService {
     return query.exec();
   }
 
+  async search(filter: any = {}, fields: any = {}): Promise<any> {
+    const where: any = {};
+    if (filter.search) {
+      const reg = new RegExp(filter.search, 'i');
+      where['$or'] = [{ name: reg }, { email: reg }];
+    }
+
+    if (filter.roles) {
+      where.roles = filter.roles;
+    }
+
+    const query = this.userModel.find(where);
+    if (Object.keys(fields).length > 0) {
+      query.select(fields);
+    }
+
+    query.sort({ [filter.sortField]: filter.sortType });
+    query.skip(filter.pageIndex * filter.pageSize);
+    query.limit(filter.pageSize);
+    const list = await query.exec();
+
+    const total = await this.count(where);
+    return {
+      list,
+      pagination: {
+        pageSize: filter.pageSize,
+        pageIndex: filter.pageIndex,
+        total,
+      },
+    };
+  }
+
   async findOne(where: any = {}, fields: any = {}): Promise<User> {
     if (where._id && typeof where._id === 'string') {
       where._id = new Types.ObjectId(where._id);

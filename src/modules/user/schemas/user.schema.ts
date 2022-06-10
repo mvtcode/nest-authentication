@@ -14,6 +14,12 @@ export class User {
   @Prop({
     type: String,
     required: true,
+  })
+  name: string;
+
+  @Prop({
+    type: String,
+    required: true,
     index: true,
     unique: true,
   })

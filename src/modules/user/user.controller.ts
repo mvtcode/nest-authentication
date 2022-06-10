@@ -13,6 +13,8 @@ import {
   BadRequestException,
   NotFoundException,
   Param,
+  Query,
+  Req,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Types } from 'mongoose';
@@ -43,9 +45,15 @@ import {
 } from './dto/login-user.dto';
 import { parseJson } from '../../libs/parse';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { LogoutReqDto } from './dto/logout.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SuccessResDto } from './dto/success.dto';
 import { UserTypes } from './constant/userType.constant';
+import { SearchUserReqDto, SearchUserResDto } from './dto/search.dto';
+import { UpgradeUserRolesDto } from './dto/upgrade-role.dto';
+
+const expToken = parseInt(process.env.JWT_EXPIRE);
+const refreshTokenExp = parseInt(process.env.REFRESH_TOKEN_EXPIRE);
 
 @ApiTags('user')
 @Controller('user')
@@ -53,6 +61,7 @@ export class UserController {
   private defaultFields = {
     _id: 1,
     email: 1,
+    name: 1,
     roles: 1,
     createdAt: 1,
     updatedAt: 1,
@@ -70,8 +79,7 @@ export class UserController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    isArray: true,
-    type: () => ProfileUserDto,
+    type: () => SearchUserResDto,
     description: 'List user response',
   })
   @ApiResponse({
@@ -83,8 +91,8 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @Roles(UserTypes.ADMIN, UserTypes.SUPPER_ADMIN)
   @Get('')
-  async list() {
-    return this.userService.findAll(this.defaultFields);
+  async list(@Query() request: SearchUserReqDto) {
+    return this.userService.search(request, this.defaultFields);
   }
 
   @ApiOperation({
@@ -145,6 +153,7 @@ export class UserController {
       {
         _id: 1,
         email: 1,
+        name: 1,
         password: 1,
         roles: 1,
       },
@@ -166,14 +175,17 @@ export class UserController {
 
     const { password, ...dataSign } = user;
 
-    const refresh_token = new Types.ObjectId().toString();
-    await this.cache.set(refresh_token, JSON.stringify(dataSign), { ttl: 0 });
+    const refreshToken = new Types.ObjectId().toString();
+    await this.cache.set(refreshToken, JSON.stringify(dataSign), {
+      ttl: refreshTokenExp,
+    });
 
     return {
       ...dataSign,
       token: this.jwtService.sign(dataSign),
       expire: process.env.JWT_EXPIRE,
-      refresh_token,
+      refreshToken,
+      expireRefreshToken: refreshTokenExp,
     };
   }
 
@@ -187,8 +199,8 @@ export class UserController {
     description: 'Logout response',
   })
   @Post('logout')
-  async logout(@Body() request: RefreshTokenDto) {
-    await this.cache.del(request.refresh_token);
+  async logout(@Body() request: LogoutReqDto) {
+    await this.cache.del(request.refreshToken);
     return {
       isSuccess: true,
     };
@@ -210,12 +222,12 @@ export class UserController {
   })
   @Post('refesh-token')
   async refeshToken(@Body() request: RefreshTokenDto) {
-    const dataCache = await this.cache.get(request.refresh_token);
+    const dataCache = await this.cache.get(request.refreshToken);
 
     if (!dataCache) {
       throw new BadRequestException({
         statusCode: HttpStatus.BAD_REQUEST,
-        message: 'Incorrect refresh_token',
+        message: 'Incorrect refresh token',
       });
     }
 
@@ -224,14 +236,14 @@ export class UserController {
     return {
       ...dataSign,
       token: this.jwtService.sign(dataSign),
-      expire: process.env.JWT_EXPIRE,
-      refresh_token: request.refresh_token,
+      expire: expToken,
+      refreshToken: request.refreshToken,
     };
   }
 
   @ApiOperation({
     operationId: 'user-detail',
-    description: 'Get user detail',
+    description: 'Get profile of current user',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -253,7 +265,7 @@ export class UserController {
 
   @ApiOperation({
     operationId: 'change-password',
-    description: 'Change password',
+    description: 'Change password current user',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -271,7 +283,7 @@ export class UserController {
   async updatePassword(@Request() req, @Body() body: UpdateUserPasswordDto) {
     const user = req.user;
 
-    if (body.old_password === body.password) {
+    if (body.oldPassword === body.password) {
       throw new BadRequestException({
         statusCode: HttpStatus.BAD_REQUEST,
         message: 'Unacceptable action, old password is not equal password',
@@ -295,7 +307,7 @@ export class UserController {
       });
     }
 
-    if (!(await comparePassword(body.old_password, info.password))) {
+    if (!(await comparePassword(body.oldPassword, info.password))) {
       throw new BadRequestException({
         statusCode: HttpStatus.BAD_REQUEST,
         message: 'Old password is not match',
@@ -309,7 +321,7 @@ export class UserController {
 
   @ApiOperation({
     operationId: 'roles',
-    description: 'Update roles',
+    description: 'Update roles, request role: ADMIN, SUPPER_ADMIN',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -324,16 +336,41 @@ export class UserController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Roles(UserTypes.ADMIN, UserTypes.SUPPER_ADMIN)
-  @Patch('roles')
+  @Patch('role')
   async updateRoles(@Body() body: UpdateUserRolesDto) {
     return {
-      isSuccess: await this.userService.updateRoles(body.id, body.roles),
+      isSuccess: await this.userService.updateRoles(body.userId, body.roles),
+    };
+  }
+
+  @ApiOperation({
+    operationId: 'upgrade-role',
+    description: 'Upgrade role for test',
+    deprecated: true,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: () => SuccessResDto,
+    description: 'Is success response',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    type: () => UnauthorizedExceptionResDto,
+    description: 'Unauthorized',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('role-upgrade')
+  async upgradeRoles(@Req() req, @Body() body: UpgradeUserRolesDto) {
+    const user = req.user;
+    return {
+      isSuccess: await this.userService.updateRoles(user._id, body.roles),
     };
   }
 
   @ApiOperation({
     operationId: 'user-delete',
-    description: 'Delete user',
+    description: 'Delete user, request role: ADMIN, SUPPER_ADMIN',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -349,7 +386,15 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @Roles(UserTypes.ADMIN, UserTypes.SUPPER_ADMIN)
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Request() req, @Param('id') id: string) {
+    const user = req.user;
+    if (user._id === id) {
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Cannot delete your self',
+      });
+    }
+
     return {
       isSuccess: await this.userService.remove(id),
     };

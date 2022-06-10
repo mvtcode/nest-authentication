@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty } from 'class-validator';
 
-export class RefreshTokenDto {
+export class LogoutReqDto {
   @ApiProperty({
     description: 'Refresh token',
     type: () => String,

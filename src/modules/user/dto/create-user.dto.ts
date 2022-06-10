@@ -14,6 +14,15 @@ export class CreateUserDto {
   email: string;
 
   @ApiProperty({
+    description: 'Name',
+    type: () => String,
+    example: 'Mac Van Tan',
+    required: true,
+  })
+  @IsNotEmpty()
+  name: string;
+
+  @ApiProperty({
     description: 'Password',
     type: () => String,
     example: '123456',
@@ -38,6 +47,13 @@ export class CreateUserResDto {
     example: 'macvantan@gmail.com',
   })
   email: string;
+
+  @ApiProperty({
+    description: 'Name',
+    type: () => String,
+    example: 'Mac Van Tan',
+  })
+  name: string;
 
   @ApiProperty({
     description: 'Roles',

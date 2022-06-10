@@ -18,7 +18,7 @@ export class UpdateUserPasswordDto extends PickType(CreateUserDto, [
   })
   @MinLength(6)
   @MaxLength(30)
-  old_password: string;
+  oldPassword: string;
 }
 
 export class UpdateUserRolesDto {
@@ -29,13 +29,13 @@ export class UpdateUserRolesDto {
     required: true,
   })
   @IsObjectId()
-  id: string;
+  userId: string;
 
   @ApiProperty({
     description: 'New roles',
     type: () => String,
     enum: UserTypes,
-    example: UserTypes.USER,
+    example: UserTypes.ADMIN,
     required: true,
   })
   roles: string;
