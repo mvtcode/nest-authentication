@@ -15,6 +15,7 @@ import {
   Param,
   Query,
   Req,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Types } from 'mongoose';
@@ -52,6 +53,7 @@ import { UserTypes } from './constant/userType.constant';
 import { SearchUserReqDto, SearchUserResDto } from './dto/search.dto';
 import { UpgradeUserRolesDto } from './dto/upgrade-role.dto';
 
+const logger = new Logger('UserController');
 const expToken = parseInt(process.env.JWT_EXPIRE);
 const refreshTokenExp = parseInt(process.env.REFRESH_TOKEN_EXPIRE);
 
@@ -146,6 +148,7 @@ export class UserController {
   })
   @Post('login')
   async login(@Body() body: LoginUserDto) {
+    logger.log(`Login: ${JSON.stringify(body)}`);
     const user = await this.userService.findOne(
       {
         email: body.email,
